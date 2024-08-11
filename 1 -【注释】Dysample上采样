@@ -41,6 +41,7 @@ style='lp' / ‘pl’ 用该模块上采样之前弄清楚这两种风格
 
 # 构造函数初始化DySample_UP模块
 class DySample_UP(nn.Module):
+    # in_channels=64 style='lp'
     def __init__(self, in_channels, scale=2, style='lp', groups=4, dyscope=False):
         super(DySample_UP,self).__init__()
         self.scale = scale  # 上采样的尺度因子，默认为2
@@ -62,15 +63,15 @@ class DySample_UP(nn.Module):
             # 输出通道数为组数的两倍
             out_channels = 2 * groups
         else:
-            # 对于'lp'风格，输出通道数为组数乘以scale的平方
+            # 对于'lp'风格，输出通道数为组数乘以scale的平方 32 = 2 * groups 4 * scale 2 ** 2
             out_channels = 2 * groups * scale ** 2
 
-        # 定义一个卷积层用于生成偏移量
-        self.offset = nn.Conv2d(in_channels, out_channels, 1)
+        # 定义一个卷积层用于生成偏移量 self.offset = Conv2d(64, 32, kernel_size=(1, 1), stride=(1, 1))
+        self.offset = nn.Conv2d(in_channels, out_channels, 1) # in_channels=64 out_channels=32 kernel_size=(1,1)
         # 使用标准差为0.001的正态分布初始化偏移量卷积层
         normal_init(self.offset, std=0.001)
 
-        # 如果启用了dyscope（动态作用域），则添加一个额外的卷积层
+        # 如果启用了dyscope（动态作用域），则添加一个额外的卷积层 default = 'False'
         if dyscope:
             self.scope = nn.Conv2d(in_channels, out_channels, 1)
             # 使用常数0初始化作用域卷积层
@@ -109,15 +110,21 @@ class DySample_UP(nn.Module):
 
     # forward_lp是局部感知（Local Perception）风格的上采样方法
     def forward_lp(self, x):
-        # 如果定义了scope，则使用scope调整offset
+        # 如果定义了scope，则使用scope调整offset hasattr(self, 'scope') = False
         if hasattr(self, 'scope'):
             offset = self.offset(x) * self.scope(x).sigmoid() * 0.5 + self.init_pos
         else:
-            # 否则，直接使用offset并加上初始化偏移
+            # 否则，直接使用offset并加上初始化偏移 
+            # x.shape = [1, 256, 4, 4] 
+            # self.offset(x).shape=[1, 32, 4, 4] 
+            # self.init_pos.shape=torch.Size([1, 32, 1, 1])
             offset = self.offset(x) * 0.25 + self.init_pos
         # i=self.sample(x, offset)
         # print("lp",i.shape)
-         # 调用sample方法进行上采样
+         # 调用sample方法进行上采样 
+         # x.shape = [1,256,4,4] 
+         # offset.shape = [1, 32, 4, 4] 
+         #  self.sample(x, offset).shape = [1,256,8,8]
         return self.sample(x, offset)
 
     # forward_pl是像素洗牌后局部感知（Pixel Shuffle then Local Perception）风格的上采样方法
@@ -139,39 +146,24 @@ class DySample_UP(nn.Module):
         if self.style == 'pl':
             return self.forward_pl(x)
         return self.forward_lp(x)
-    '''
-    # 'lp' (局部感知):
-    这种风格直接在输入特征图的每个局部区域生成偏移量，然后基于这些偏移进行上采样。
-    这意味着每个输出像素的位置都是由其对应输入区域内的内容直接影响的，
-    适用于需要精细控制每个输出位置如何从输入特征中取样的情况。
-    在需要保持局部特征连续性和细节信息的任务（如图像超分辨率、细节增强）中，'lp' 风格可能会表现得更好。
-  
-    # 'pl' (像素shuffle后局部感知):
-    在应用偏移量之前，首先通过像素shuffle操作打乱输入特征图的像素排列，
-    这实质上是一种空间重排，能够促进通道间的信息交互。随后，再进行与'lp'类似的局部感知上采样。
-    这种风格可能更有利于全局上下文的融合和特征的重新组织，适合于那些需要较强依赖于相邻区域上下文信息的任务
-    （例如语义分割，全景分割）。像素shuffle增加了特征图的表征能力，有助于模型捕捉更广泛的上下文信息。
  
-    # 两者各有优势，依赖于特定任务的需求：
-    如果任务强调保留和增强局部细节，那么 'lp' 可能是更好的选择。
-    如果任务需要更多的全局上下文信息和特征重组，'pl' 可能更合适。
-    '''
 
 if __name__ == '__main__':
-    input = torch.rand(1, 64, 4, 4)
+    input = torch.rand(4, 256, 64, 64)
     # in_channels=64, scale=4, style='lp'/‘pl’,
-    DySample_UP = DySample_UP(in_channels=64,scale=2,style='lp')
-    output = DySample_UP(input)
+    DySample_UP = DySample_UP(in_channels=256,scale=2,style='lp')
+    output = DySample_UP(input) # output.shape = [1,256,8,8]
     print('input_size:', input.size())
     print('output_size:', output.size())
 
-    print(DySample_UP)
-    # 查看模型名称和大小
-    for name, param in DySample_UP.named_parameters():
-        print(name, param.size())
-    # 查看模块的参数数量
-    param_count = sum(p.numel() for p in DySample_UP.parameters())
-    print(f"Total number of parameters: {param_count}") 
+#     print(DySample_UP)
+#     # 查看模型名称和大小
+#     for name, param in DySample_UP.named_parameters():
+#         print(name, param.size())
+#     # 查看模块的参数数量
+#     param_count = sum(p.numel() for p in DySample_UP.parameters())
+#     print(f"Total number of parameters: {param_count}") 
+
 
 # input_size: torch.Size([1, 64, 4, 4])
 # output_size: torch.Size([1, 64, 8, 8])
