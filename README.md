@@ -7,3 +7,9 @@
 3.20240813 CGAFusion 《DEA-Net: Single image dehazing based on detail-enhanced convolution and content-guided attention》
 
 <img width="632" alt="image" src="https://github.com/user-attachments/assets/d63d5700-9984-4bcf-9cce-42942aa4bd12">
+
+4. （240815）多头交叉注意力模块  https://arxiv.org/pdf/2203.16952
+![Uploading image.png…]()
+
+
+
